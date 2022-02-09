@@ -1,6 +1,6 @@
 {
-    "client_code": "",
-    "owner": "vivsoft",
+    "client_code": "james",
+    "owner": "tkaza",
     "product": "control-plane",
     "location": "eastus",
     "vnet_cidr": "10.0.0.0/16"
