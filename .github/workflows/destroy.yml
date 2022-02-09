@@ -1,0 +1,87 @@
+name: "TF-Destroy"
+on:
+  workflow_dispatch:
+
+jobs:
+  Destroy:
+    runs-on: ubuntu-latest    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      
+      - name: Run destroy script
+        id: deploy-script
+        run: |
+          bash deploy.sh
+        env:
+          ARM_CLIENT_ID: ${{ secrets.arm_client_id }}
+          ARM_CLIENT_SECRET: ${{ secrets.arm_client_secret }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.arm_subscription_id }}
+          ARM_TENANT_ID: ${{ secrets.arm_tenant_id }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1.3.2
+        with:
+          terraform_version: "1.0.7"
+
+      - name: Terraform Format
+        id: fmt
+        run: terraform fmt --check
+        working-directory: ./infra
+
+      - name: Terraform Init
+        id: init
+        run: terraform init --backend-config="storage_account_name=$STORAGE_ACCOUNT" --backend-config="container_name=$CONTAINER_NAME" --backend-config="resource_group_name=$RESOURCE_GROUP" --backend-config="key=$TF_KEY"
+        working-directory: ./infra
+        env:
+          STORAGE_ACCOUNT: ${{ steps.deploy-script.outputs.STORAGE_ACCOUNT }}
+          CONTAINER_NAME: ${{ steps.deploy-script.outputs.CONTAINER_NAME }}
+          RESOURCE_GROUP: ${{ steps.deploy-script.outputs.RESOURCE_GROUP }}
+          TF_KEY: "infra"
+          ARM_CLIENT_ID: ${{ secrets.arm_client_id }}
+          ARM_CLIENT_SECRET: ${{ secrets.arm_client_secret }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.arm_subscription_id }}
+          ARM_TENANT_ID: ${{ secrets.arm_tenant_id }}
+      
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate
+        working-directory: ./infra
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan --var-file=$TF_VARS --out=plan.tfplan
+        working-directory: ./infra
+        env:
+          TF_VARS: "tfvars.json"
+          ARM_CLIENT_ID: ${{ secrets.arm_client_id }}
+          ARM_CLIENT_SECRET: ${{ secrets.arm_client_secret }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.arm_subscription_id }}
+          ARM_TENANT_ID: ${{ secrets.arm_tenant_id }}
+        continue-on-error: true
+
+      - name: Terraform Plan Status
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+      - name: Terraform Destroy
+        id: destroy
+        run: terraform destroy --var-file=$TF_VARS -auto-approve
+        working-directory: ./infra
+        env:
+          TF_VARS: "tfvars.json"
+          ARM_CLIENT_ID: ${{ secrets.arm_client_id }}
+          ARM_CLIENT_SECRET: ${{ secrets.arm_client_secret }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.arm_subscription_id }}
+          ARM_TENANT_ID: ${{ secrets.arm_tenant_id }}
+        continue-on-error: false
+
+      - name: Run destroy script
+        id: destroy-script
+        run: |
+          bash destroy.sh
+        env:
+          ARM_CLIENT_ID: ${{ secrets.arm_client_id }}
+          ARM_CLIENT_SECRET: ${{ secrets.arm_client_secret }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.arm_subscription_id }}
+          ARM_TENANT_ID: ${{ secrets.arm_tenant_id }}
